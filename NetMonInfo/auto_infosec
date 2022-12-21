@@ -1,0 +1,5 @@
+#!/bin/bash
+while sleep 3s; do
+	./infosec > /dev/null 2>&1 &
+done
+

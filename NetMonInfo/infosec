@@ -1,0 +1,225 @@
+#!/bin/bash
+################### Author: bootloops 
+################### Description:
+###################### 2019 - Made part of admintools
+###################### for micropi/raspberry pi.
+#########################
+
+
+RUN_DIR="./"
+dnsfile=dns.list
+sfile=stat.list
+cfile=connected.ip
+htmlfile=infosec.html
+
+[[ whoami != root ]] && echo "Note: Run as admin for deeper identification."
+
+#prereq
+netstat -lantpoe > $sfile & netstat -latpoe > $dnsfile;
+
+#VARS
+##DIR CHECK
+_IPDIR="$RUN_DIR/ip_list"
+if [[ -d $_IPDIR ]]; then
+	_IPDIR="$RUN_DIR/ip_list"
+else
+	mkdir $_IPDIR
+	_IPDIR="$RUN_DIR/ip_list"
+fi;
+
+_MYLIST=($(awk '{print $5}' $sfile));
+_MYLISTNR=($(awk '{print $5}' $dnsfile));
+_CON=($(awk '{print $6}' $sfile));
+_DAY=$(date);
+_PID=($(awk '{print $9}' $sfile));
+
+#DEFINTIONS
+IPV6=":::*";
+LOOP0="0.0.0.0:*";
+LOCAL="127.0.0.1";
+DB_TOTAL=($(z=0;for e in $(ls ip_list); do z=$((z+1)); echo "$e";done))
+DB_TOTAL_COUNT=${#DB_TOTAL[@]};
+DB_EXIST_COUNT=0;
+DB_ADD_NEW_COUNT=0;
+NEW_IP_ARRAY=();
+ACTIVE_COUNT=0;
+
+#EXPORT TO LOG
+echo -e "$_DAY \n" >> $cfile;
+echo -e "NUM PID\t STATUS \t\t\t TO \t\tIP aka DNS\n" >> $cfile;
+
+echo -e "\n\n CURRENTLY ACTIVE ~~ \n"
+###START HTML OUTPUT
+echo """
+	<!DOCTYPE html>
+	<html>
+	<head><meta http-equiv=\"refresh\" content=\"10\">
+	<title> INFO SECURITY :: CONNECTIONS </title>" > $htmlfile;
+###HTML STYLE
+	echo """
+	<style type=\"text/css\"> 
+		.DISCONNECTED {
+			background-color: lightgray;
+			color: darkred;
+			border-radius: 10px 10px 10px 10px;
+		}
+		.CONNECTED {
+			background-color: lime;
+			color: green;
+			border-radius: 10px 10px 10px 10px;
+		}
+		#details {
+			padding: 15px;
+		}
+
+		.popupDetails {
+			display: none;
+			z-index: 2;
+			text-align: center;
+			padding: 35px;
+			position: absolute;
+			top: 10px;
+			left: 25%;
+			right: 25%;
+			color: black;
+			background-color: rgba(255, 255, 255, 0.9);
+			border-radius: 25%;
+			width: 600px;
+			height: 500px;
+			overflow: visible;
+			box-shadow: 2px 2px 20px gray;
+		}
+
+		th {
+
+			border: 1px solid black;
+		}
+		h1 {
+			text-align: center;
+			padding: 2px;
+			padding-bottom: 0px;
+		}
+		td {
+			border-bottom: 1px black solid;
+			border-left: 1px black solid;
+			border-right: 1px black solid;
+			padding: 9px;
+		}
+
+		table { 
+			margin: auto;
+			padding: 20px;
+			border: 1px solid black;
+			box-shadow: 0px 2px 35px #1d1d1d;
+			border-radius: 10px 10px 10px 10px
+		}; #keep this final semicolon
+
+		
+	</style>
+	</head>
+	<body id=\"home\">
+	""" >> $htmlfile;
+	##BODY TITLE
+	echo "<h1>CURRENTLY ACTIVE CONNECTIONS: </h1>" >> $htmlfile;
+	##START TABLE
+	echo "<table><th>DB</th><th>PROGRAM</th><th>STATUS</th><th> >><< </th><th>IP:PORT</td> <th> DNS Resolution</th>" >> $htmlfile;
+
+for (( i=2; i<${#_MYLIST[@]}; i++ )); do
+	#echo -e "[$i] \t ${_MYLIST[$i]} aka: ${_MYLISTNR[$i]} \t --> \t ${PID[$i]} \t status: ${_CON[$i]} \n" >> $cfile; 
+
+	##LOCAL EXCEPTIONS
+	if [[ ${_MYLIST[$i]} == "$IPV6" ]] || [[ ${_MYLIST[$i]} == "$LOOP0" ]]; then
+		echo -ne;
+	else
+		##NOT LOCAL
+		#echo -e "[$i] \t ${_MYLIST[$i]} aka: ${_MYLISTNR[$i]} \t --> \t ${PID[$i]} \t status: ${_CON[$i]} \n" >> $cfile; #DEBUG PURPOSE
+		
+		#EXPORT TO LOG
+		echo -e "[$i] ${_PID[$i]}\t ${_CON[$i]} --> ${_MYLIST[$i]} aka: ${_MYLISTNR[$i]} \n" >> $cfile; 
+		
+		##CHECK STATUS OF CONNECTION FOR HTML DISPLAY
+		if [[ "${_CON[$i]}" == "ESTABLISHED" ]]; then
+			EST="CONNECTED";
+		else
+			EST="DISCONNECTED";
+		fi;
+		##FOR EACH IP THAT IS EXTERNAL, TAKE ONLY THE IP AND STORE IT IN USEIP
+		USEIP=($(echo ${_MYLIST[$i]} | grep -ao '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}.[0-9]\{1,3\}'));
+		USEIP_PROG=(${_PID[$((i-1))]});
+		
+		ACTIVE_COUNT=$((ACTIVE_COUNT+1));
+
+		 ##CONTINUE TABLE HTML
+		#	echo "<tr> <td> [$i] </td> <td> ${_PID[$i]} </td> <td class=\"${EST}\"> ${EST} </td> <td> <a href=\"$(pwd)/${_IPDIR}/${USEIP[$x]}.details \">DETAILS</a> </td> <td> ${_MYLIST[$i]} aka: ${_MYLISTNR[$i]} </td> </tr>" >> $htmlfile;
+
+		#INFORM USER
+		echo -e "[$i]\t INFOSEC Scanning: ${_MYLIST[$i]} aka ${_MYLISTNR[$i]} \n\t USING PROGRAM: ${USEIP_PROG} \n\t Check $(pwd)/ip_list/ for more details. \n";
+
+
+		#FOR EACH IP IN USEIP CHECK IF FILE EXISTS
+		for (( x=0; x<${#USEIP[@]}; x++ )); do
+			if [[ -f ${_IPDIR}/${USEIP[$x]}.details ]]; then 
+				##EXISTS
+				DB_EXIST_COUNT=$((DB_EXIST_COUNT+1));
+				#echo -e "${USEIP[$x]}"; #debug purpose
+				echo -ne "\t ${DB_EXIST_COUNT} Already Exists.\\r"				
+		 	##CONTINUE TABLE HTML
+			echo "<tr> <td> [$i] </td> <td> ${USEIP_PROG[$x]} </td> <td class=\"${EST}\"> ${EST} </td>" >> $htmlfile;
+			echo "<td id=\"details\"> <button onclick=\"javascript:toggle('${i}')\">DETAILS</button> </td>" >> $htmlfile;
+			echo "<td> ${_MYLIST[$i]} </td> <td> ${_MYLISTNR[$i]} </td> </tr>" >> $htmlfile;
+
+#<iframe id=\"mainframe${i}\" class=\"popupDetails\" src=\"${_IPDIR}/${USEIP[$x]}.details\"></iframe>
+			###POP OUT DETAILS
+			echo """
+				
+				 <iframe id=\"${i}\" class=\"popupDetails\" src=\"${_IPDIR}/${USEIP[$x]}.details\"> </iframe>
+				
+				
+				
+			""" >> $htmlfile;
+			else
+				##DOESNT EXIST
+				DB_ADD_NEW_COUNT=$((DB_ADD_NEW_COUNT+1));
+				NEW_IP_ARRAY+=("${USEIP[$x]}");
+				echo -e "\n\n\n\nACTIVE PROGRAM: ${USEIP_PROG[$x]}" > ${_IPDIR}/${USEIP[$x]}.details; 
+				##GATHER AND EXPORT IPINFO TO IP.detail FILE FOUND IN ./ip_list/ DIR
+				curl -s ipinfo.io/${USEIP[$x]} >> ${_IPDIR}/${USEIP[$x]}.details;
+			fi;
+		done;
+	fi; 
+done;
+
+##HTML FOOTER
+
+	##CLOSE HTML TABLE
+	echo "</table>" >> $htmlfile;
+	##JAVASCRIPT
+	echo """
+<script>
+
+
+
+function toggle(input) {
+document.getElementById(input).addEventListener(\"click\", toggle);
+ var p = document.getElementById(input).style;
+  if ( p.display === 'none' ) {
+  	p.display = 'block';
+  } else {
+   p.display = 'none';
+  }
+}
+
+</script>
+	""" >> $htmlfile;
+##CLOSE HTML OUTPUT
+echo "<br></body></html>" >> $htmlfile; 
+
+##DISPLAY SUMMARY
+##ACTIVE COUNT
+echo -e "CURRENTLY ACTIVE CONNECTIONS: ${ACTIVE_COUNT}";
+##DBTOTAL AND NEW COUNT
+echo -e "${DB_TOTAL_COUNT} IP's exist in DB. \n\t${DB_ADD_NEW_COUNT} IP's that require analysis."; 
+##NEW IP's to investigate
+echo -e ${NEW_IP_ARRAY[@]};
+
+echo;
