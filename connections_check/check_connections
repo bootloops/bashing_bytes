@@ -1,0 +1,13 @@
+#!/bin/bash
+
+FILE=connections.tmp;
+sudo netstat -lantp | awk '{print $5}' > $FILE;
+_MYLIST=($(grep -o '[1-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}' $FILE))
+
+for (( C=0; C<${#_MYLIST[@]}; C++ )); do
+	echo -e "${_MYLIST[$C]} \\r";
+	curl -s ipinfo.io/${_MYLIST[$C]} > ${_MYLIST[$C]};
+	echo -ne "\t\t\tDONE \\r";
+	echo "File location: $(pwd)/${_MYLIST[$C]}";
+done;
+

@@ -1,0 +1,17 @@
+#!/bin/bash
+export DISPLAY=:0
+
+printf "Scanning $i\n"
+zenity --info --text "Virus Scan Started, DO NOT TURN OFF YOUR COMPUTER!" --width="600" --height="200" &
+
+if [ -e $HOME/QV ]; then
+	cd $HOME/QV
+	clamscan -v -r --move=$HOME/QV -l $USER-avscan.log --scan-ole2=yes --scan-pdf=yes --scan-html=yes --scan-archive=yes --detect-pua=yes $HOME | zenity --progress --no-cancel --pulsate --text='Antivirus Scanning. DO NOT TURN OFF COMPUTER' --auto-close --time-remaining &
+else
+	mkdir $HOME/QV
+	cd $HOME/QV
+	clamscan -v -r --move=$HOME/QV -l $USER-avscan.log --scan-ole2=yes --scan-pdf=yes --scan-html=yes --scan-archive=yes --detect-pua=yes $HOME | zenity --progress --width="500" --height="200" --no-cancel --pulsate --text='Antivirus Scanning. DO NOT TURN OFF COMPUTER' --auto-close --time-remaining &
+fi
+
+printf "Complete."
+

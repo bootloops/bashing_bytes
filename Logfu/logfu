@@ -1,0 +1,165 @@
+#!/bin/bash
+############################################################
+######## Author: bootloops - made as part of 'admintools'
+#### Description:
+######## Use this to scan /var/logs/*.log to identify
+######## any invalid users, failed passwords, auth failed,
+######## bad protocols, etc..
+##########################################################
+##
+
+
+#DATE TIME
+DT=$(date +%a_%d%m%Y)
+MIN=$(date +%M)
+#PROG HOME
+PROG_HOME=$HOME/LOGFU
+
+##BLOCKS
+HOME_BLOCKS=$PROG_HOME/BLOCKS
+BLOCKABLE=$HOME_BLOCKS/blockable.ip ## IS THIS VAR EVEN IN USE?
+NOBLOCK=$HOME_BLOCKS/noblock-$DT_$MIN.ip
+BLOCK=$HOME_BLOCKS/block-list-$DT-$MIN.ip
+SORT=$HOME_BLOCKS/SORTED-$DT_$MIN.ip
+AB=$HOME_BLOCKS/ALREADY_BLOCKED_$DT.ip
+
+#RANGE FILES
+HOME_RANGE=$PROG_HOME/RANGE
+IP0=$HOME_RANGE/IP0-$DT_MIN.ip
+IP255=$HOME_RANGE/IP255-$DT_MIN.ip
+ADD=$HOME_RANGE/BLOCKING-RANGES-$DT_$MIN.ip
+
+#REPORTS
+HOME_REPORTS=$PROG_HOME/REPORTS
+REPORT=$HOME_REPORTS/NET_REPORT-$DT.report
+
+
+echo -ne "\n\t\tGATHERING FROM LOGS..\\r"
+#GET LOG INFO
+AUTH_LOG_HOME=$PROG_HOME/AUTH_LOG
+FAILED_AUTH=$AUTH_LOG_HOME/AUTH_FAILED-$DT.log
+FAILED_PWD=$AUTH_LOG_HOME/FAILED_PASSWORD-$DT.log
+RHOST=$AUTH_LOG_HOME/RHOST-$DT.ip
+INVALID=$AUTH_LOG_HOME/INVALID_USERS-$DT.log
+BAD_PROTOCOL=$AUTH_LOG_HOME/BAD_PROTOCOL.log
+
+ALLOGS=($(ls /var/log/*.*))
+THELOGS=()
+
+#BATCH HOME
+BATCH_HOME=$PROG_HOME/BATCH
+BATCH=$BATCH_HOME/BATCH-$DT-$MIN.full
+
+CURIPT_HOME=$PROG_HOME/TABLES
+if [ -d $PROG_HOME ]; then echo; else echo "Making $PROG_HOME Dir..."; mkdir $PROG_HOME; fi
+if [ -d $CURIPT_HOME ]; then
+	#CURRENT IPT
+	CURIPT=$CURIPT_HOME/CURRENTIP.table
+	sudo iptables -L | grep range | awk '{print $9}' > $CURIPT
+	BLOCKED=($(cat $CURIPT))
+else echo "Making $CURIPT_HOME Dir..."; mkdir $CURIPT_HOME; 
+	#CURRENT IPT
+	CURIPT=$CURIPT_HOME/CURRENTIP.table
+	sudo iptables -L | grep range | awk '{print $9}' > $CURIPT
+	BLOCKED=($(cat $CURIPT))
+fi	
+if [ -d $HOME_BLOCKS ]; then echo; else echo "Making $HOME_BLOCKS Dir..."; mkdir $HOME_BLOCKS; fi
+if [ -d $HOME_RANGE ]; then echo; else echo "Making $HOME_RANGE Dir..."; mkdir $HOME_RANGE; fi
+if [ -d $HOME_REPORTS ]; then echo; else echo "Making $HOME_REPORTS Dir..."; mkdir $HOME_REPORTS; fi
+if [ -d $AUTH_LOG_HOME ]; then echo; else echo "Making $AUTH_LOG_HOME Dir..."; mkdir $AUTH_LOG_HOME; fi
+if [ -d $BATCH_HOME ]; then echo; else echo "Making $BATCH_HOME Dir..."; mkdir $BATCH_HOME; fi
+
+
+#FOR OLD LOGS
+# put this inside for loop if, " || [ "$each" = "/var/log/auth.log.1" ]"
+for each in ${ALLOGS[@]}; do
+if [ "$each" = "/var/log/auth.log" ]; then
+	cat $each | grep -a 'Bad protocol version identification' > $BAD_PROTOCOL
+	cat $each | grep -a 'authentication failure' > $FAILED_AUTH
+	cat $each | grep -a 'Failed password' > $FAILED_PWD
+	cat $each | grep -a 'Invalid user' > $INVALID
+    	cat $each | grep -a 'rhost' > $RHOST
+fi
+done
+
+######################################################## 81.2.3.4 -- XXXXXXXX
+cat $BAD_PROTOCOL $RHOST $INVALID $FAILED_PWD $FAILED_AUTH | grep -ao '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}' | sort | uniq > $BATCH
+
+echo "[ STARTED: $(date) ]"
+COUNT=0
+TOTAL=$(cat $BATCH | wc -l)
+M="127.0.0.1" #local host
+L="192.168.2" #lan prefix --needs automation
+LAN=0
+F=0
+ABC=0
+B=0
+while read A; do
+	((COUNT++))
+	if [ $COUNT -lt $TOTAL ]; then
+		echo -ne "\t[ READING $COUNT ]\\r"
+	else
+		echo -ne "\t[ READING COMPLETED ]\\r"
+	fi
+	if [ "$A" = "$L" ]; then
+		((LAN++))
+		echo $A >> $NOBLOCK
+	elif [ "$A" = "$M" ]; then
+		((F++))
+		echo $A >> $NOBLOCK
+	else
+		cat $CURIPT | grep -q $A
+		case $? in
+			0) ((ABC++)); echo $A >> $AB ;;
+			*) ((B++)); echo -ne "\t\t\t\t\tBLOCK REQUIRED: $B\\r"; echo $A >> $BLOCK;;
+		esac
+		# if [ $? -gt 0 ]; then
+		# 	((B++))
+		# 	echo -ne "\t\t\t\t\tBLOCK REQUIRED: $B\\r"
+		# 	echo $A >> $BLOCK
+		# else
+		# 	((ABC++))
+		# 	echo $A >> $AB
+		# fi
+	fi
+done <$BATCH
+
+echo -ne """
+		BATCH READ: $COUNT
+		LAN DETECT: $LAN
+		ADMIN:	    $F
+
+		ALREADY BLOCKED: $ABC
+		TO BE BLOCKED: $B
+
+		"""
+# '-s' file exists and is larger than 0bytes
+if [ -s $BLOCK ]; then
+echo -ne "\nGENERATING BLOCK REPORT..\\r"
+
+#GENERATE BLOCK REPORT
+cat $BLOCK | sort -nr | uniq -c > $REPORT
+
+echo -e "\n\nGENERATING BLOCK IP RANGES.."
+while read B; do echo "$B.0" >> $IP0; done <$BLOCK
+while read C; do echo "$C.255" >> $IP255; done <$BLOCK
+paste -d ' ' $IP0 $IP255 > $SORT.tmp
+sort -nr $SORT.tmp | uniq > $SORT
+rm $SORT.tmp
+
+echo -ne "FINAL SORT.\\r"
+#sort
+cat $SORT | sort -nr | uniq > $ADD
+
+#block
+COUNT=0
+while read IP; do
+	echo -ne "\t\t\t\t\tADDING: $((COUNT++))\\r"
+	blistrange $IP &>/dev/null
+done <$ADD
+echo "SUCCESSFULLY ADDED: $COUNT"
+else
+echo "Nothing to do."
+fi
+rm -r $HOME_BLOCKS $HOME_RANGE $BATCH_HOME $CURIPT_HOME
+echo "[ FINISHED: $(date) ]"

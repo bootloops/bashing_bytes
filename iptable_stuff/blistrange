@@ -1,0 +1,3 @@
+#!/bin/bash
+
+sudo iptables -I INPUT -m iprange --src-range $1-$2 -j DROP; echo "Blocked IP Range: $1 to $2"; echo

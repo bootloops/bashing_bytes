@@ -1,0 +1,12 @@
+#!/bin/bash
+
+[[ $2 == help ]] && echo """
+    Usage: blist input_file_with_ip_addresses.txt
+    iptables will then perform a DROP instruction for each ip
+        > sudo iptables -A INPUT -s $each -j DROP; echo "Blocked IP: $each"; echo
+"""
+file="$@"
+for each in $(cat $file | uniq)
+do
+ sudo iptables -A INPUT -s $each -j DROP; echo "Blocked IP: $each"; echo
+done
