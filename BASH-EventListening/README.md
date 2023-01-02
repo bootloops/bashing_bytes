@@ -1,4 +1,4 @@
-# BASH EVEN LISTENER
+# BASH EVENT LISTENER
 ## event-test.sh
 
 Wondered if it'd be possible to build a platformer type game within the commandline, using 
