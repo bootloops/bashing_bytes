@@ -13,7 +13,6 @@ open the .html file with your browser to view data.
 Using ./auto_infosec will continuously update the .html file with connections
 listed with netstat
 
->cd NetMonInfo
 > ./auto_infosec 
 	or
 > ./infosec [runs once]
